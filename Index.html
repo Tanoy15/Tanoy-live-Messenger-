@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Private Live Chat App</title>
+
+<!-- Firebase compat scripts -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    color: #fff;
+    font-family: Arial, sans-serif;
+  }
+  .container {
+    width: 400px;
+    min-height: 500px;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  }
+  button {
+    cursor: pointer;
+  }
+</style>
+
+</head>
+<body>
+<div class="container" id="container">
+  <h2 style="text-align:center;">🔥 Private Live Chat</h2>
+  <div id="content"></div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyA3FQKcDslDCbEQNd-9cTaaHH-cVcsW1g4",
+    authDomain: "tanoy-b0503.firebaseapp.com",
+    databaseURL: "https://tanoy-b0503-default-rtdb.firebaseio.com",
+    projectId: "tanoy-b0503",
+    storageBucket: "tanoy-b0503.firebasestorage.app",
+    messagingSenderId: "404921656735",
+    appId: "1:404921656735:web:57b49fad772fdffe0809aa",
+    measurementId: "G-T6L82X7NWY"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.database();
+  const provider = new firebase.auth.GoogleAuthProvider();
+
+  let currentUser = null;
+  const content = document.getElementById("content");
+
+  // 🔹 Google Login
+  function showLogin() {
+    content.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.innerText = "Sign in with Google";
+    btn.style.padding = "10px 20px";
+    btn.style.border = "none";
+    btn.style.borderRadius = "10px";
+    btn.style.background = "#4285F4";
+    btn.style.color = "#fff";
+    btn.onclick = () => {
+      auth.signInWithPopup(provider).then(result => {
+        currentUser = result.user;
+        checkUsername();
+      }).catch(err => alert(err.message));
+    };
+    content.appendChild(btn);
+  }
+
+  // 🔹 Check username
+  function checkUsername() {
+    const userRef = db.ref("users/" + currentUser.uid);
+    userRef.get().then(snapshot => {
+      if (snapshot.exists() && snapshot.val().name) {
+        setupOnDisconnect();
+        showContacts();
+      } else {
+        showUsernameInput();
+      }
+    });
+  }
+
+  function showUsernameInput() {
+    content.innerHTML = "";
+    const input = document.createElement("input");
+    input.placeholder = "Enter username";
+    input.style.width = "90%";
+    input.style.padding = "10px";
+    input.style.margin = "10px 0";
+    input.style.borderRadius = "10px";
+
+    const btn = document.createElement("button");
+    btn.innerText = "OK";
+    btn.style.padding = "10px 20px";
+    btn.style.background = "#34A853";
+    btn.style.color = "#fff";
+    btn.style.border = "none";
+    btn.style.borderRadius = "10px";
+
+    btn.onclick = () => {
+      const name = input.value.trim();
+      if (!name) return alert("Enter valid name!");
+      db.ref("users/" + currentUser.uid).set({ name, online: true });
+      setupOnDisconnect();
+      showContacts();
+    };
+
+    content.appendChild(input);
+    content.appendChild(btn);
+  }
+
+  function setupOnDisconnect() {
+    const userRef = db.ref("users/" + currentUser.uid);
+    userRef.update({ online: true });
+    userRef.onDisconnect().update({ online: false });
+  }
+
+  // 🔹 Show contacts
+  function showContacts() {
+    content.innerHTML = "<h3>Contacts</h3>";
+    const list = document.createElement("div");
+    list.style.display = "flex";
+    list.style.flexDirection = "column";
+    list.style.gap = "8px";
+    content.appendChild(list);
+
+    db.ref("users").on("value", snapshot => {
+      list.innerHTML = "";
+      snapshot.forEach(child => {
+        const data = child.val();
+        if (child.key === currentUser.uid) return;
+        const btn = document.createElement("button");
+        btn.innerText = data.name + (data.online ? " (Online)" : " (Offline)");
+        btn.style.padding = "10px";
+        btn.style.border = "none";
+        btn.style.borderRadius = "10px";
+        btn.style.cursor = "pointer";
+        btn.style.background = data.online ? "#0F9D58" : "#555";
+        btn.style.color = "#fff";
+        btn.onclick = () => startChat(child.key, data.name);
+        list.appendChild(btn);
+      });
+    });
+  }
+
+  // 🔹 Start private chat
+  function startChat(chatWithUid, chatWithName) {
+    content.innerHTML = "";
+    const header = document.createElement("h3");
+    header.innerText = "Chat with " + chatWithName;
+    content.appendChild(header);
+
+    const messagesDiv = document.createElement("div");
+    messagesDiv.style.height = "300px";
+    messagesDiv.style.overflowY = "auto";
+    messagesDiv.style.display = "flex";
+    messagesDiv.style.flexDirection = "column";
+    messagesDiv.style.gap = "6px";
+    messagesDiv.style.padding = "10px";
+    messagesDiv.style.background = "rgba(0,0,0,0.2)";
+    messagesDiv.style.borderRadius = "10px";
+    content.appendChild(messagesDiv);
+
+    const typingDiv = document.createElement("div");
+    typingDiv.style.height = "20px";
+    typingDiv.style.color = "yellow";
+    content.appendChild(typingDiv);
+
+    const inputDiv = document.createElement("div");
+    inputDiv.style.display = "flex";
+    inputDiv.style.marginTop = "10px";
+
+    const input = document.createElement("input");
+    input.placeholder = "Type message...";
+    input.style.flex = "1";
+    input.style.padding = "10px";
+    input.style.borderRadius = "10px 0 0 10px";
+
+    const sendBtn = document.createElement("button");
+    sendBtn.innerText = "Send";
+    sendBtn.style.padding = "10px 20px";
+    sendBtn.style.border = "none";
+    sendBtn.style.borderRadius = "0 10px 10px 0";
+    sendBtn.style.background = "#4285F4";
+    sendBtn.style.color = "#fff";
+
+    inputDiv.appendChild(input);
+    inputDiv.appendChild(sendBtn);
+    content.appendChild(inputDiv);
+
+    const chatId = [currentUser.uid, chatWithUid].sort().join("_");
+    const chatRef = db.ref("chats/" + chatId);
+    const typingRef = db.ref("typing/" + chatId);
+
+    chatRef.on("value", snapshot => {
+      messagesDiv.innerHTML = "";
+      snapshot.forEach(child => {
+        const msg = child.val();
+        const div = document.createElement("div");
+        div.innerText = msg.text;
+        div.style.padding = "8px";
+        div.style.borderRadius = "10px";
+        div.style.maxWidth = "70%";
+        div.style.alignSelf = msg.sender === currentUser.uid ? "flex-end" : "flex-start";
+        div.style.background = msg.sender === currentUser.uid ? "rgba(52,168,83,0.8)" : "rgba(0,0,0,0.5)";
+        div.style.color = "#fff";
+
+        if (msg.sender === currentUser.uid) {
+          div.onclick = () => {
+            if (confirm("Delete this message?")) {
+              db.ref("chats/" + chatId + "/" + child.key).remove();
+            }
+          };
+        }
+        messagesDiv.appendChild(div);
+      });
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    input.addEventListener("input", () => {
+      typingRef.update({ [currentUser.uid]: input.value.length > 0 });
+    });
+
+    typingRef.on("value", snapshot => {
+      let typing = false;
+      snapshot.forEach(child => {
+        if (child.key !== currentUser.uid && child.val()) typing = true;
+      });
+      typingDiv.innerText = typing ? chatWithName + " is typing..." : "";
+    });
+
+    sendBtn.onclick = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      chatRef.push({ sender: currentUser.uid, text });
+      input.value = "";
+      typingRef.update({ [currentUser.uid]: false });
+    };
+  }
+
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      currentUser = user;
+      setupOnDisconnect();
+      checkUsername();
+    } else {
+      showLogin();
+    }
+  });
+
+</script>
+</body>
+</html>
